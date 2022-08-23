@@ -1,43 +1,26 @@
-use druid::widget::{Align, Button, Flex, TextBox};
+use druid::widget::{Align, Button, Flex, Label};
 use druid::{
-    commands, AppDelegate, AppLauncher, Command, DelegateCtx, Env, FileDialogOptions, FileSpec,
-    Handled, LocalizedString, Target, Widget, WindowDesc,
+    commands, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, FileDialogOptions,
+    Handled, Lens, LocalizedString, Target, Widget, WindowDesc,
 };
+use std::path::PathBuf;
+use std::rc::Rc;
 
 struct Delegate;
 
-pub fn main() {
-    let main_window = WindowDesc::new(ui_builder)
-        .title(LocalizedString::new("open-save-demo").with_placeholder("Opening/Saving Demo"));
-    let data = "Type here.".to_owned();
-    AppLauncher::with_window(main_window)
-        .delegate(Delegate)
-        .use_simple_logger()
-        .launch(data)
-        .expect("launch failed");
+#[derive(Clone, Default, Data, Lens)]
+struct AppState {
+    selected_file: Rc<PathBuf>,
 }
 
-fn ui_builder() -> impl Widget<String> {
-    let rs = FileSpec::new("Rust source", &["rs"]);
-    let txt = FileSpec::new("Text file", &["txt"]);
-    let other = FileSpec::new("Bogus file", &["foo", "bar", "baz"]);
-    let save_dialog_options = FileDialogOptions::new()
-        .allowed_types(vec![rs, txt, other])
-        .default_type(txt);
-    let open_dialog_options = save_dialog_options.clone();
+fn ui_builder() -> impl Widget<AppState> {
+    let input = Label::dynamic(|data: &AppState, _| format!("Path: {:?}", data.selected_file));
 
-    let input = TextBox::new();
-    let save = Button::new("Save").on_click(move |ctx, _, _| {
-        ctx.submit_command(Command::new(
-            druid::commands::SHOW_SAVE_PANEL,
-            save_dialog_options.clone(),
-            Target::Auto,
-        ))
-    });
-    let open = Button::new("Open").on_click(move |ctx, _, _| {
+    let allowed_filetypes = FileDialogOptions::new();
+    let open_btn = Button::new("Open").on_click(move |ctx, _, _| {
         ctx.submit_command(Command::new(
             druid::commands::SHOW_OPEN_PANEL,
-            open_dialog_options.clone(),
+            allowed_filetypes.clone(),
             Target::Auto,
         ))
     });
@@ -45,39 +28,34 @@ fn ui_builder() -> impl Widget<String> {
     let mut col = Flex::column();
     col.add_child(input);
     col.add_spacer(8.0);
-    col.add_child(save);
-    col.add_child(open);
+    col.add_child(open_btn);
     Align::centered(col)
 }
 
-impl AppDelegate<String> for Delegate {
+impl AppDelegate<AppState> for Delegate {
     fn command(
         &mut self,
         _ctx: &mut DelegateCtx,
         _target: Target,
         cmd: &Command,
-        data: &mut String,
+        data: &mut AppState,
         _env: &Env,
     ) -> Handled {
-        // if let Some(file_info) = cmd.get(commands::SAVE_FILE) {
-        //     if let Err(e) = std::fs::write(file_info.path(), &data[..]) {
-        //         println!("Error writing file: {}", e);
-        //     }
-        //     return true;
-        // }
-        println!("Hello from delegate");
         if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
-            match std::fs::read_to_string(file_info.path()) {
-                Ok(s) => {
-                    let first_line = s.lines().next().unwrap_or("");
-                    *data = first_line.to_owned();
-                }
-                Err(e) => {
-                    println!("Error opening file: {}", e);
-                }
-            }
+            data.selected_file = Rc::new(file_info.path().to_path_buf());
             return Handled::Yes;
         }
         Handled::No
     }
+}
+
+fn main() {
+    let main_window = WindowDesc::new(ui_builder)
+        .title(LocalizedString::new("open-save-demo").with_placeholder("Opening/Saving Demo"));
+    let data = AppState::default();
+    AppLauncher::with_window(main_window)
+        .delegate(Delegate)
+        .use_simple_logger()
+        .launch(data)
+        .expect("launch failed");
 }
