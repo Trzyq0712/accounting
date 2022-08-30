@@ -1,5 +1,8 @@
 use std::path::Path;
 
+use druid::Selector;
+pub mod allegro;
+
 pub const OPERATIONS: [Ops; 3] = [Ops::Kurier, Ops::Allegro, Ops::FTS];
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
@@ -10,15 +13,14 @@ pub enum Ops {
 }
 
 impl Ops {
-    pub fn into_selector_str(self) -> &'static str {
+    pub fn into_selector(self) -> Selector {
         use Ops::*;
-        match self {
+        let op_str = match self {
             Kurier => "operation.kurier",
             Allegro => "operation.allegro",
             FTS => "operation.fts",
-        }
-    }
-    pub fn process<F: AsRef<Path>>(&self, file: F) {
+        };
+        Selector::new(op_str)
     }
 }
 
@@ -33,8 +35,6 @@ impl Into<&str> for Ops {
     }
 }
 
-
-pub fn process_allegro<F: AsRef<Path>>(file: F) -> Result<(), String> {
-
-    Ok(())
+pub trait Processor {
+    fn process<P: AsRef<Path>>(&self, path: P) -> Result<csv::Writer<Vec<u8>>, csv::Error>;
 }

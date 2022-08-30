@@ -1,11 +1,13 @@
 use druid::widget::{Align, Button, Flex, Label};
 use druid::{
     commands, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, FileDialogOptions,
-    Handled, Lens, LocalizedString, Selector, Target, Widget, WindowDesc,
+    Handled, Lens, LocalizedString, Target, Widget, WindowDesc, Application,
 };
 mod lib;
 use std::path::PathBuf;
 use std::rc::Rc;
+
+use crate::lib::Ops;
 
 struct Delegate;
 
@@ -25,9 +27,8 @@ fn ui_builder() -> impl Widget<AppState> {
     });
 
     let buttons = lib::OPERATIONS.iter().map(|op| {
-        Button::new(<lib::Ops as Into<&str>>::into(*op)).on_click(|ctx, _: &mut AppState, _| {
-            ctx.submit_command(Selector::new(op.into_selector_str()).with(()))
-        })
+        Button::new(<lib::Ops as Into<&str>>::into(*op))
+            .on_click(|ctx, _: &mut AppState, _| ctx.submit_command(op.into_selector().with(())))
     });
 
     let mut col = Flex::column();
@@ -51,9 +52,19 @@ impl AppDelegate<AppState> for Delegate {
         data: &mut AppState,
         _env: &Env,
     ) -> Handled {
-        println!("{:?}", cmd);
         if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
             data.selected_file = Rc::new(file_info.path().to_path_buf());
+            return Handled::Yes;
+        }
+
+        if let Some(_) = cmd.get(Ops::Allegro.into_selector()) {
+            let processor = lib::allegro::AllegroProcessor;
+            use lib::Processor;
+            let result = processor.process(data.selected_file.as_ref());
+            let s = String::from_utf8(result.unwrap().into_inner().unwrap()).unwrap().replace(".", ",");
+            let mut clipboard = Application::global().clipboard();
+            clipboard.put_string(&s);
+            println!("{:?}", s);
             return Handled::Yes;
         }
         Handled::No
